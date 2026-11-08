@@ -1,0 +1,6 @@
+title = "Proton Calendar"
+description = "Imminent Proton Calendar event, click opens Proton Calendar"
+api = 1
+side = "right"
+order = 4
+runs = ["bar-alert"]
