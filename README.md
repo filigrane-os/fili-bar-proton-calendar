@@ -13,3 +13,11 @@ The daemon starts at login by itself (`autostart` in `module.toml`, run by niri 
 ## Personal data
 
 The ICS links are secrets: one per line in `~/.config/filigrane/bar/proton-calendar.url` (Proton: Calendar settings > Share via a link, read-only). Options: copy `config.example.toml` to `~/.config/filigrane/bar/proton-calendar.toml`. Neither file is ever committed (`.gitignore` blocks `*.url` and `config.toml`).
+
+## Tests
+
+```sh
+sh tests/run.sh
+```
+
+No network and no real account: the external commands (`notify-send`, `secret-tool`, `rclone`, `ip`...) are stubs and `HOME` is a temporary folder. The checks every plugin passes (manifest, scripts parse, no personal data in the repository, `install.sh` idempotent) are in `tests/common.sh`; GitHub Actions runs them on each push.
