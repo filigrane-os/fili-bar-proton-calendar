@@ -24,4 +24,3 @@ if [ ! -s "$url_file" ]; then
         echo "put your ICS links, one per line, in $url_file (chmod 600)"
     fi
 fi
-echo "autostart: $here/bin/cal-notify at login"

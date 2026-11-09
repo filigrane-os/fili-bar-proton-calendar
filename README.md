@@ -6,7 +6,7 @@ Imminent Proton Calendar event in the Filigrane bar, without an open web app. `b
 fili-bar install https://github.com/filigrane-os/fili-bar-proton-calendar
 ```
 
-Start `bin/cal-notify` at login (niri `spawn-at-startup`).
+The daemon starts at login by itself (`autostart` in `module.toml`, run by niri through `fili-bar autostart`).
 
 `fili-bar install` also runs `install.sh`: it creates your options file from `config.example.toml`, asks for what is missing (credentials go to the keyring or to a file under `~/.config`, never to this folder) and prints what is left to do. Run it again with `fili-bar setup proton-calendar`; it is safe to repeat.
 

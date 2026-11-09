@@ -4,3 +4,4 @@ api = 1
 side = "right"
 order = 4
 runs = ["bar-alert"]
+autostart = ["./bin/cal-notify"]
