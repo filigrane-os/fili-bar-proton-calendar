@@ -1,0 +1,4 @@
+# Copy to ~/.config/filigrane/bar/proton-calendar.toml (never committed).
+lead_minutes = 10    # notify this many minutes before an event
+# The private ICS links are secrets: put them one per line in the file below, never in this repository.
+url_file = "~/.config/filigrane/bar/proton-calendar.url"

@@ -1,0 +1,107 @@
+#!/bin/sh
+# Proton Calendar notifications without an open webapp: reads the private ICS link (Share via a link, read-only)
+# every 5 min and notifies LEAD minutes before each event. Started by niri (loop, no daemon).
+# The URLs are secrets: ~/.config/filigrane/bar/proton-calendar.url (outside the repository), one per line (empty lines and # ignored). The Proton ICS link is updated late.
+# Also writes the next events (30 days, 5 at most) in ~/.local/state/agenda, read by the clock card
+# of the fili-bar: one line "start epoch<TAB>title<TAB>place". Offline: last cached ICS. Recurring events: RRULE/EXDATE handled, changes to a single occurrence ignored.
+. "$(dirname "$(readlink -f "$0")")/opt.sh"
+URL_FILE="$(opt url_file "$HOME/.config/filigrane/bar/proton-calendar.url")"
+LEAD="$(opt lead_minutes 10)"
+STATE="$HOME/.local/state/cal-notify"
+mkdir -p "$STATE"
+exec 9>"$STATE/lock"
+flock -n 9 || exit 0
+
+while :; do
+    if [ -s "$URL_FILE" ]; then
+        i=0
+        grep -v -e '^[[:space:]]*$' -e '^[[:space:]]*#' "$URL_FILE" | while IFS= read -r URL; do
+            i=$((i + 1))
+            curl -fsS -m 20 -o "$STATE/cal-$i.ics.new" "$URL" 2>/dev/null && mv "$STATE/cal-$i.ics.new" "$STATE/cal-$i.ics"
+        done
+        ls "$STATE"/cal-*.ics >/dev/null 2>&1 && STATE="$STATE" LEAD="$LEAD" python3 -I - <<'PY'
+import os, datetime as dt
+from icalendar import Calendar
+from dateutil.rrule import rrulestr
+import subprocess
+
+state = os.environ["STATE"]
+lead = dt.timedelta(minutes=int(os.environ["LEAD"]))
+now = dt.datetime.now().astimezone()
+seen_file = os.path.join(state, "seen")
+seen = set(open(seen_file).read().split("\n")) if os.path.exists(seen_file) else set()
+new_seen = set()
+
+def aware(v):
+    if isinstance(v, dt.datetime):
+        return v if v.tzinfo else v.astimezone()
+    return None  # all-day: ignored
+
+import glob
+events = []
+for f in sorted(glob.glob(os.path.join(state, "cal-*.ics"))):
+    try:
+        events += Calendar.from_ical(open(f, "rb").read()).walk("VEVENT")
+    except Exception:
+        pass
+for ev in events:
+    try:
+        start = aware(ev.decoded("DTSTART"))
+        if start is None:
+            continue
+        uid = str(ev.get("UID", ""))
+        starts = [start]
+        if "RRULE" in ev:
+            rule = rrulestr(ev["RRULE"].to_ical().decode(), dtstart=start)
+            starts = rule.between(now - dt.timedelta(minutes=1), now + lead, inc=True)
+            ex = ev.get("EXDATE")
+            if ex:
+                ex = ex if isinstance(ex, list) else [ex]
+                skip = {aware(d.dt) for e in ex for d in e.dts}
+                starts = [s for s in starts if s not in skip]
+        for s in starts:
+            key = f"{uid}|{s.isoformat()}"
+            if now - dt.timedelta(minutes=1) <= s <= now + lead:
+                new_seen.add(key)
+                if key not in seen:
+                    mins = max(0, round((s - now).total_seconds() / 60))
+                    when = f"dans {mins} min" if mins else "maintenant"
+                    loc = str(ev.get("LOCATION", "")).strip()
+                    body = f"{s.astimezone():%H:%M} ({when})" + (f"\n{loc}" if loc else "")
+                    subprocess.run(["notify-send", "-a", "Proton Calendar", "-i", "x-office-calendar",
+                                    str(ev.get("SUMMARY", "(sans titre)")), body])
+                    subprocess.run([os.path.expanduser("~/.local/bin/bar-alert"), "push", "cal", str(int(s.timestamp())),
+                                    f"{s.astimezone():%H:%M}", str(ev.get("SUMMARY", "(sans titre)")).replace("\t", " ")])
+    except Exception:
+        continue
+# next events for the clock card
+upcoming = []
+horizon = now + dt.timedelta(days=30)
+for ev in events:
+    try:
+        start = aware(ev.decoded("DTSTART"))
+        if start is None:
+            continue
+        starts = [start]
+        if "RRULE" in ev:
+            starts = rrulestr(ev["RRULE"].to_ical().decode(), dtstart=start).between(now, horizon, inc=True)
+            ex = ev.get("EXDATE")
+            if ex:
+                ex = ex if isinstance(ex, list) else [ex]
+                skip = {aware(d.dt) for e in ex for d in e.dts}
+                starts = [s for s in starts if s not in skip]
+        for s in starts:
+            if now <= s <= horizon:
+                upcoming.append((s, str(ev.get("SUMMARY", "(sans titre)")).replace("\t", " "), str(ev.get("LOCATION", "")).strip().replace("\t", " ").replace("\n", " ")))
+    except Exception:
+        continue
+upcoming.sort(key=lambda u: u[0])
+agenda = os.path.join(os.path.dirname(state), "agenda")
+open(agenda + ".new", "w").write("".join(f"{int(s.timestamp())}\t{t}\t{l}\n" for s, t, l in upcoming[:5]))
+os.replace(agenda + ".new", agenda)
+# only the keys still in the window are kept (avoids growth and resending)
+open(seen_file, "w").write("\n".join(new_seen))
+PY
+    fi
+    sleep 300
+done
