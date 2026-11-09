@@ -8,6 +8,8 @@ fili-bar install https://github.com/filigrane-os/fili-bar-proton-calendar
 
 Start `bin/cal-notify` at login (niri `spawn-at-startup`).
 
+`fili-bar install` also runs `install.sh`: it creates your options file from `config.example.toml`, asks for what is missing (credentials go to the keyring or to a file under `~/.config`, never to this folder) and prints what is left to do. Run it again with `fili-bar setup proton-calendar`; it is safe to repeat.
+
 ## Personal data
 
 The ICS links are secrets: one per line in `~/.config/filigrane/bar/proton-calendar.url` (Proton: Calendar settings > Share via a link, read-only). Options: copy `config.example.toml` to `~/.config/filigrane/bar/proton-calendar.toml`. Neither file is ever committed (`.gitignore` blocks `*.url` and `config.toml`).
